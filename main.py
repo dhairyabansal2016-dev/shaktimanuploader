@@ -879,6 +879,8 @@ async def txt_handler(bot: Client, m: Message):
                cmd = f'yt-dlp --add-header "referer:https://web.classplusapp.com/" --add-header "x-cdn-tag:empty" -f "{ytf}" "{url}" -o "{name}.mp4"'
             elif "youtube.com" in url or "youtu.be" in url:
                 cmd = f'yt-dlp --cookies youtube_cookies.txt -f "{ytf}" "{url}" -o "{name}".mp4'
+            elif "transcoded-videos.classx.co.in" in url:
+                cmd = f'yt-dlp --add-header "Referer:https://player.akamai.net.in/" -f "{ytf}" "{url}" -o "{name}.mp4"'
             else:
                 cmd = f'yt-dlp -f "{ytf}" "{url}" -o "{name}.mp4"'
 
@@ -917,6 +919,28 @@ async def txt_handler(bot: Client, m: Message):
                         continue    
   
                 elif ".pdf" in url:
+                    if "static-db-v2.appx.co.in" in url:
+                        try:
+                            headers = {
+                                "Referer": "https://player.akamai.net.in/",
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                            }
+                            scraper = cloudscraper.create_scraper()
+                            response = scraper.get(url, headers=headers)
+                            if response.status_code == 200:
+                                with open(f'{name}.pdf', 'wb') as file:
+                                    file.write(response.content)
+                                await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1)
+                                count += 1
+                                os.remove(f'{name}.pdf')
+                            else:
+                                await m.reply_text(f"Appx Download Failed: {response.status_code}")
+                        except Exception as e:
+                            await m.reply_text(f"Appx Error: {str(e)}")
+                        finally:
+                            if os.path.exists(f'{name}.pdf'):
+                                os.remove(f'{name}.pdf')
+                                
                     if "cwmediabkt99" in url:
                         max_retries = 3  # Define the maximum number of retries
                         retry_delay = 4  # Delay between retries in seconds
