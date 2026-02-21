@@ -941,7 +941,7 @@ async def txt_handler(bot: Client, m: Message):
                             if os.path.exists(f'{name}.pdf'):
                                 os.remove(f'{name}.pdf')
                                 
-                    if "cwmediabkt99" in url:
+                    elif "cwmediabkt99" in url:
                         max_retries = 3  # Define the maximum number of retries
                         retry_delay = 4  # Delay between retries in seconds
                         success = False  # To track whether the download was successful
