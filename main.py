@@ -894,7 +894,7 @@ async def txt_handler(bot: Client, m: Message):
                 if "drive" in url:
                     try:
                         ka = await helper.download(url, name)
-                        copy = await bot.send_document(chat_id=channel_id,document=ka, caption=cc1, , parse_mode="html")
+                        copy = await bot.send_document(chat_id=channel_id,document=ka, caption=cc1, parse_mode="html")
                         count+=1
                         os.remove(ka)
                     except FloodWait as e:
@@ -914,7 +914,7 @@ async def txt_handler(bot: Client, m: Message):
                             if response.status_code == 200:
                                 with open(f'{name}.pdf', 'wb') as file:
                                     file.write(response.content)
-                                await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1, , parse_mode="html")
+                                await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1, parse_mode="html")
                                 count += 1
                                 os.remove(f'{name}.pdf')
                             else:
@@ -942,7 +942,7 @@ async def txt_handler(bot: Client, m: Message):
                                     with open(f'{name}.pdf', 'wb') as file:
                                         file.write(response.content)
                                     await asyncio.sleep(retry_delay)  # Optional, to prevent spamming
-                                    copy = await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1, , parse_mode="html")
+                                    copy = await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1, parse_mode="html")
                                     count += 1
                                     os.remove(f'{name}.pdf')
                                     success = True
@@ -964,7 +964,7 @@ async def txt_handler(bot: Client, m: Message):
                             cmd = f'yt-dlp -o "{name}.pdf" "{url}"'
                             download_cmd = f"{cmd} -R 25 --fragment-retries 25"
                             os.system(download_cmd)
-                            copy = await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1, , parse_mode="html")
+                            copy = await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1, parse_mode="html")
                             count += 1
                             os.remove(f'{name}.pdf')
                         except FloodWait as e:
@@ -976,7 +976,7 @@ async def txt_handler(bot: Client, m: Message):
                     try:
                         await helper.pdf_download(f"{api_url}utkash-ws?url={url}&authorization={api_token}",f"{name}.html")
                         time.sleep(1)
-                        await bot.send_document(chat_id=channel_id, document=f"{name}.html", caption=cchtml, , parse_mode="html")
+                        await bot.send_document(chat_id=channel_id, document=f"{name}.html", caption=cchtml, parse_mode="html")
                         os.remove(f'{name}.html')
                         count += 1
                     except FloodWait as e:
@@ -990,7 +990,7 @@ async def txt_handler(bot: Client, m: Message):
                         cmd = f'yt-dlp -o "{name}.{ext}" "{url}"'
                         download_cmd = f"{cmd} -R 25 --fragment-retries 25"
                         os.system(download_cmd)
-                        copy = await bot.send_photo(chat_id=channel_id, photo=f'{name}.{ext}', caption=ccimg, , parse_mode="html")
+                        copy = await bot.send_photo(chat_id=channel_id, photo=f'{name}.{ext}', caption=ccimg, parse_mode="html")
                         count += 1
                         os.remove(f'{name}.{ext}')
                     except FloodWait as e:
@@ -1004,7 +1004,7 @@ async def txt_handler(bot: Client, m: Message):
                         cmd = f'yt-dlp -x --audio-format {ext} -o "{name}.{ext}" "{url}"'
                         download_cmd = f"{cmd} -R 25 --fragment-retries 25"
                         os.system(download_cmd)
-                        await bot.send_document(chat_id=channel_id, document=f'{name}.{ext}', caption=cc1, , parse_mode="html")
+                        await bot.send_document(chat_id=channel_id, document=f'{name}.{ext}', caption=cc1, parse_mode="html")
                         os.remove(f'{name}.{ext}')
                     except FloodWait as e:
                         await m.reply_text(str(e))
