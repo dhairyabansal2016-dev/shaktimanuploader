@@ -34,7 +34,6 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 
 # ⚙️ Pyrogram
-from pyromod import listen
 from pyrogram import Client, filters, idle
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import (
@@ -68,6 +67,10 @@ from logs import logging
 from utils import progress_bar
 from vars import *
 
+# Pyromod fix
+import pyromod.listen
+pyromod.listen.Client.listen = pyromod.listen.listen
+
 from db import db
 
 auto_flags = {}
@@ -80,12 +83,15 @@ userbot = None
 timeout_duration = 300  # 5 minutes
 
 
-# Initialize bot
+# Initialize bot with random session
 bot = Client(
     "ugx",
     api_id=API_ID,
     api_hash=API_HASH,
-    bot_token=BOT_TOKEN
+    bot_token=BOT_TOKEN,
+    workers=10,
+    sleep_threshold=60,
+    in_memory=True
 )
 
 # Register command handlers
@@ -95,13 +101,15 @@ register_clean_handler(bot)
 async def set_log_channel_cmd(client: Client, message: Message):
     """Set log channel for the bot"""
     try:
+        # Check if user is admin
         if not db.is_admin(message.from_user.id):
-            await bot.send_message(message.chat.id, "⚠️ You are not authorized to use this command.")
+            await message.reply_text("⚠️ You are not authorized to use this command.")
             return
 
+        # Get command arguments
         args = message.text.split()
         if len(args) != 2:
-            await bot.send_message(message.chat.id, 
+            await message.reply_text(
                 "❌ Invalid format!\n\n"
                 "Use: /setlog channel_id\n"
                 "Example: /setlog -100123456789"
@@ -111,55 +119,59 @@ async def set_log_channel_cmd(client: Client, message: Message):
         try:
             channel_id = int(args[1])
         except ValueError:
-            await bot.send_message(message.chat.id, "❌ Invalid channel ID. Please use a valid number.")
+            await message.reply_text("❌ Invalid channel ID. Please use a valid number.")
             return
 
+        # Set the log channel without validation
         if db.set_log_channel(client.me.username, channel_id):
-            await bot.send_message(message.chat.id, 
+            await message.reply_text(
                 "✅ Log channel set successfully!\n\n"
                 f"Channel ID: {channel_id}\n"
                 f"Bot: @{client.me.username}"
             )
         else:
-            await bot.send_message(message.chat.id, "❌ Failed to set log channel. Please try again.")
+            await message.reply_text("❌ Failed to set log channel. Please try again.")
 
     except Exception as e:
-        await bot.send_message(message.chat.id, f"❌ Error: {str(e)}")
+        await message.reply_text(f"❌ Error: {str(e)}")
 
 @bot.on_message(filters.command("getlog") & filters.private)
 async def get_log_channel_cmd(client: Client, message: Message):
     """Get current log channel info"""
     try:
+        # Check if user is admin
         if not db.is_admin(message.from_user.id):
-            await bot.send_message(message.chat.id, "⚠️ You are not authorized to use this command.")
+            await message.reply_text("⚠️ You are not authorized to use this command.")
             return
 
+        # Get log channel ID
         channel_id = db.get_log_channel(client.me.username)
         
         if channel_id:
+            # Try to get channel info but don't worry if it fails
             try:
                 channel = await client.get_chat(channel_id)
                 channel_info = f"📢 Channel Name: {channel.title}\n"
             except:
                 channel_info = ""
             
-            await bot.send_message(message.chat.id, 
-                f"<b>📋 Log Channel Info</b>\n\n"
+            await message.reply_text(
+                f"**📋 Log Channel Info**\n\n"
                 f"🤖 Bot: @{client.me.username}\n"
                 f"{channel_info}"
-                f"🆔 Channel ID: <code>{channel_id}</code>\n\n"
+                f"🆔 Channel ID: `{channel_id}`\n\n"
                 "Use /setlog to change the log channel"
             )
         else:
-            await bot.send_message(message.chat.id, 
-                f"<b>📋 Log Channel Info</b>\n\n"
+            await message.reply_text(
+                f"**📋 Log Channel Info**\n\n"
                 f"🤖 Bot: @{client.me.username}\n"
                 "❌ No log channel set\n\n"
                 "Use /setlog to set a log channel"
             )
 
     except Exception as e:
-        await bot.send_message(message.chat.id, f"❌ Error: {str(e)}")
+        await message.reply_text(f"❌ Error: {str(e)}")
 
 # Re-register auth commands
 bot.add_handler(MessageHandler(auth.add_user_cmd, filters.command("add") & filters.private))
@@ -171,75 +183,81 @@ cookies_file_path = os.getenv("cookies_file_path", "youtube_cookies.txt")
 api_url = "http://master-api-v3.vercel.app/"
 api_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNzkxOTMzNDE5NSIsInRnX3VzZXJuYW1lIjoi4p61IFtvZmZsaW5lXSIsImlhdCI6MTczODY5MjA3N30.SXzZ1MZcvMp5sGESj0hBKSghhxJ3k1GTWoBUbivUe1I"
 cwtoken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE3NTExOTcwNjQsImNvbiI6eyJpc0FkbWluIjpmYWxzZSwiYXVzZXIiOiJVMFZ6TkdGU2NuQlZjR3h5TkZwV09FYzBURGxOZHowOSIsImlkIjoiVWtoeVRtWkhNbXRTV0RjeVJIcEJUVzExYUdkTlp6MDkiLCJmaXJzdF9uYW1lIjoiVWxadVFXaFBaMnAwSzJsclptVXpkbGxXT0djMlREWlRZVFZ5YzNwdldXNXhhVEpPWjFCWFYyd3pWVDA5IiwiZW1haWwiOiJWSGgyWjB0d2FUZFdUMVZYYmxoc2FsZFJSV2xrY0RWM2FGSkRSU3RzV0c5M1pDOW1hR0kxSzBOeVRUMDkiLCJwaG9uZSI6IldGcFZSSFZOVDJFeGNFdE9Oak4zUzJocmVrNHdRVDA5IiwiYXZhdGFyIjoiSzNWc2NTOHpTMHAwUW5sa2JrODNSRGx2ZWtOaVVUMDkiLCJyZWZlcnJhbF9jb2RlIjoiWkdzMlpUbFBORGw2Tm5OclMyVTRiRVIxTkVWb1FUMDkiLCJkZXZpY2VfdHlwZSI6ImFuZHJvaWQiLCJkZXZpY2VfdmVyc2lvbiI6IlEoQW5kcm9pZCAxMC4wKSIsImRldmljZV9tb2RlbCI6IlhpYW9taSBNMjAwN0oyMENJIiwicmVtb3RlX2FkZHIiOiI0NC4yMDIuMTkzLjIyMCJ9fQ.ONBsbnNwCQQtKMK2h18LCi73e90s2Cr63ZaIHtYueM-Gt5Z4sF6Ay-SEaKaIf1ir9ThflrtTdi5eFkUGIcI78R1stUUch_GfBXZsyg7aVyH2wxm9lKsFB2wK3qDgpd0NiBoT-ZsTrwzlbwvCFHhMp9rh83D4kZIPPdbp5yoA_06L0Zr4fNq3S328G8a8DtboJFkmxqG2T1yyVE2wLIoR3b8J3ckWTlT_VY2CCx8RjsstoTrkL8e9G5ZGa6sksMb93ugautin7GKz-nIz27pCr0h7g9BCoQWtL69mVC5xvVM3Z324vo5uVUPBi1bCG-ptpD9GWQ4exOBk9fJvGo-vRg"
-photologo = 'https://ibb.co/TD6rn4tc'
-photoyt = 'https://i.ibb.co/v6Vr7HCt/1000003297.png'
+photologo = 'https://ibb.co/TD6rn4tc' #https://i.ibb.co/v6Vr7HCt/1000003297.png
+photoyt = 'https://i.ibb.co/v6Vr7HCt/1000003297.png' #https://i.ibb.co/v6Vr7HCt/1000003297.png
 photocp = 'https://i.ibb.co/v6Vr7HCt/1000003297.png'
 photozip = 'https://i.ibb.co/v6Vr7HCt/1000003297.png'
 
 
+# Inline keyboard for start command
 BUTTONSCONTACT = InlineKeyboardMarkup([[InlineKeyboardButton(text="📞 Contact", url="https://t.me/Tgballa")]])
 keyboard = InlineKeyboardMarkup(
     [
         [
-            InlineKeyboardButton(text="🛠️ Help", url="https://t.me/Tgballa")
-        ],
+            InlineKeyboardButton(text="🛠️ Help", url="https://t.me/Tgballa")        ],
     ]
 )
 
+# Image URLs for the random image feature
 image_urls = [
     "https://ibb.co/TD6rn4tc",
     "https://ibb.co/TD6rn4tc",
     "https://ibb.co/TD6rn4tc",
+    # Add more image URLs as needed
 ]
 
         
 @bot.on_message(filters.command("cookies") & filters.private)
 async def cookies_handler(client: Client, m: Message):
-    await bot.send_message(m.chat.id, 
+    await m.reply_text(
         "Please upload the cookies file (.txt format).",
         quote=True
     )
 
     try:
+        # Wait for the user to send the cookies file
         input_message: Message = await client.listen(m.chat.id)
 
+        # Validate the uploaded file
         if not input_message.document or not input_message.document.file_name.endswith(".txt"):
-            await bot.send_message(m.chat.id, "Invalid file type. Please upload a .txt file.")
+            await m.reply_text("Invalid file type. Please upload a .txt file.")
             return
 
+        # Download the cookies file
         downloaded_path = await input_message.download()
 
+        # Read the content of the uploaded file
         with open(downloaded_path, "r") as uploaded_file:
             cookies_content = uploaded_file.read()
 
+        # Replace the content of the target cookies file
         with open(cookies_file_path, "w") as target_file:
             target_file.write(cookies_content)
 
-        await bot.send_message(m.chat.id, 
-            "✅ Cookies updated successfully.\n📂 Saved in <code>youtube_cookies.txt</code>."
+        await input_message.reply_text(
+            "✅ Cookies updated successfully.\n📂 Saved in `youtube_cookies.txt`."
         )
 
     except Exception as e:
-        await bot.send_message(m.chat.id, f"⚠️ An error occurred: {str(e)}")
+        await m.reply_text(f"⚠️ An error occurred: {str(e)}")
 
 @bot.on_message(filters.command(["t2t"]))
 async def text_to_txt(client, message: Message):
     user_id = str(message.from_user.id)
-    editable = await bot.send_message(message.chat.id, 
-        "<blockquote>Welcome to the Text to .txt Converter!\nSend the <b>text</b> for convert into a <code>.txt</code> file.</blockquote>"
-    )
+    # Inform the user to send the text data and its desired file name
+    editable = await message.reply_text(f"<blockquote>Welcome to the Text to .txt Converter!\nSend the **text** for convert into a `.txt` file.</blockquote>")
     input_message: Message = await bot.listen(message.chat.id)
     if not input_message.text:
-        await bot.send_message(message.chat.id, "<b>Send valid text data</b>")
+        await message.reply_text("**Send valid text data**")
         return
 
     text_data = input_message.text.strip()
-    await input_message.delete()
+    await input_message.delete()  # Corrected here
     
-    await editable.edit("<b>🔄 Send file name or send /d for filename</b>")
+    await editable.edit("**🔄 Send file name or send /d for filename**")
     inputn: Message = await bot.listen(message.chat.id)
     raw_textn = inputn.text
-    await inputn.delete()
+    await inputn.delete()  # Corrected here
     await editable.delete()
 
     if raw_textn == '/d':
@@ -248,33 +266,33 @@ async def text_to_txt(client, message: Message):
         custom_file_name = raw_textn
 
     txt_file = os.path.join("downloads", f'{custom_file_name}.txt')
-    os.makedirs(os.path.dirname(txt_file), exist_ok=True)
+    os.makedirs(os.path.dirname(txt_file), exist_ok=True)  # Ensure the directory exists
     with open(txt_file, 'w') as f:
         f.write(text_data)
         
-    await message.reply_document(
-        document=txt_file,
-        caption=f"<code>{custom_file_name}.txt</code>\n\n<blockquote>You can now download your content! 📥</blockquote>"
-    )
+    await message.reply_document(document=txt_file, caption=f"`{custom_file_name}.txt`\n\n<blockquote>You can now download your content! 📥</blockquote>")
     os.remove(txt_file)
 
+# Define paths for uploaded file and processed file
 UPLOAD_FOLDER = '/path/to/upload/folder'
 EDITED_FILE_PATH = '/path/to/save/edited_output.txt'
 
 @bot.on_message(filters.command("getcookies") & filters.private)
 async def getcookies_handler(client: Client, m: Message):
     try:
+        # Send the cookies file to the user
         await client.send_document(
             chat_id=m.chat.id,
             document=cookies_file_path,
-            caption="Here is the <code>youtube_cookies.txt</code> file."
+            caption="Here is the `youtube_cookies.txt` file."
         )
     except Exception as e:
-        await bot.send_message(m.chat.id, f"⚠️ An error occurred: {str(e)}")
+        await m.reply_text(f"⚠️ An error occurred: {str(e)}")
 
-@bot.on_message(filters.command(["stop"]))
+@bot.on_message(filters.command(["stop"]) )
 async def restart_handler(_, m):
-    await bot.send_message(m.chat.id, "🚦<b>STOPPED</b>", True)
+    
+    await m.reply_text("🚦**STOPPED**", True)
     os.execl(sys.executable, sys.executable, *sys.argv)
         
 
@@ -285,53 +303,57 @@ async def start(bot: Client, m: Message):
             if not db.is_channel_authorized(m.chat.id, bot.me.username):
                 return
                 
-            await bot.send_message(m.chat.id, 
-                "<b>✨ Bot is active in this channel</b>\n\n"
-                "<b>Available Commands:</b>\n"
+            await m.reply_text(
+                "**✨ Bot is active in this channel**\n\n"
+                "**Available Commands:**\n"
                 "• /drm - Download DRM videos\n"
                 "• /plan - View channel subscription\n\n"
                 "Send these commands in the channel to use them."
             )
         else:
+            # Check user authorization
             is_authorized = db.is_user_authorized(m.from_user.id, bot.me.username)
             is_admin = db.is_admin(m.from_user.id)
             
             if not is_authorized:
                 await m.reply_photo(
                     photo=photologo,
-                    caption="<b>Mʏ Nᴀᴍᴇ <a href='https://t.me/Tgballa'>DRM Wɪᴢᴀʀᴅ 🦋</a>\n\nYᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀᴄᴄᴇꜱꜱ ᴛᴏ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ\nCᴏɴᴛᴀᴄᴛ <a href='https://t.me/Tgballa'>RealToppers</a> ғᴏʀ ᴀᴄᴄᴇꜱꜱ</b>",
+                    caption="**Mʏ Nᴀᴍᴇ [DRM Wɪᴢᴀʀᴅ 🦋](https://t.me/Tgballa)\n\nYᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀᴄᴄᴇꜱꜱ ᴛᴏ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ\nCᴏɴᴛᴀᴄᴛ [RealToppers](https://t.me/Tgballa) ғᴏʀ ᴀᴄᴄᴇꜱꜱ**",
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("RealToppers", url="https://t.me/Tgballa")],
-                        [
-                            InlineKeyboardButton("ғᴇᴀᴛᴜʀᴇꜱ 🪔", callback_data="features"),
-                            InlineKeyboardButton("ᴅᴇᴛᴀɪʟꜱ 🦋", callback_data="details")
-                        ]
-                    ])
+    [
+        InlineKeyboardButton("RealToppers", url="https://t.me/Tgballa")
+    ],
+    [
+        InlineKeyboardButton("ғᴇᴀᴛᴜʀᴇꜱ 🪔", callback_data="features"),
+        InlineKeyboardButton("ᴅᴇᴛᴀɪʟꜱ 🦋", callback_data="details")
+    ]
+])
                 )
                 return
                 
             commands_list = (
-                "<b>>  /drm - ꜱᴛᴀʀᴛ ᴜᴘʟᴏᴀᴅɪɴɢ ᴄᴘ/ᴄᴡ ᴄᴏᴜʀꜱᴇꜱ</b>\n"
-                "<b>>  /plan - ᴠɪᴇᴡ ʏᴏᴜʀ ꜱᴜʙꜱᴄʀɪᴘᴛɪᴏɴ ᴅᴇᴛᴀɪʟꜱ</b>\n"
+                "**>  /drm - ꜱᴛᴀʀᴛ ᴜᴘʟᴏᴀᴅɪɴɢ ᴄᴘ/ᴄᴡ ᴄᴏᴜʀꜱᴇꜱ**\n"
+                "**>  /plan - ᴠɪᴇᴡ ʏᴏᴜʀ ꜱᴜʙꜱᴄʀɪᴘᴛɪᴏɴ ᴅᴇᴛᴀɪʟꜱ**\n"
             )
             
             if is_admin:
                 commands_list += (
-                    "\n<b>👑 Admin Commands</b>\n"
+                    "\n**👑 Admin Commands**\n"
                     "• /users - List all users\n"
                 )
             
             await m.reply_photo(
                 photo=photologo,
-                caption=f"<b>Mʏ ᴄᴏᴍᴍᴀɴᴅꜱ ғᴏʀ ʏᴏᴜ <a href='tg://settings'>{m.from_user.first_name}</a></b>\n\n{commands_list}",
+                caption=f"**Mʏ ᴄᴏᴍᴍᴀɴᴅꜱ ғᴏʀ ʏᴏᴜ [{m.from_user.first_name} ](tg://settings)**\n\n{commands_list}",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("RealToppers", url="https://t.me/Tgballa")],
-                    [
-                        InlineKeyboardButton("ғᴇᴀᴛᴜʀᴇꜱ 🪔", callback_data="features"),
-                        InlineKeyboardButton("ᴅᴇᴛᴀɪʟꜱ 🦋", callback_data="details")
-                    ]
-                ])
-            )
+    [
+        InlineKeyboardButton("RealToppers", url="https://t.me/Tgballa")
+    ],
+    [
+        InlineKeyboardButton("ғᴇᴀᴛᴜʀᴇꜱ 🪔", callback_data="features"),
+        InlineKeyboardButton("ᴅᴇᴛᴀɪʟꜱ 🦋", callback_data="details")
+    ]])
+)
             
     except Exception as e:
         print(f"Error in start command: {str(e)}")
@@ -339,8 +361,10 @@ async def start(bot: Client, m: Message):
 
 def auth_check_filter(_, client, message):
     try:
+        # For channel messages
         if message.chat.type == "channel":
             return db.is_channel_authorized(message.chat.id, client.me.username)
+        # For private messages
         else:
             return db.is_user_authorized(message.from_user.id, client.me.username)
     except Exception:
@@ -351,7 +375,7 @@ auth_filter = filters.create(auth_check_filter)
 @bot.on_message(~auth_filter & filters.private & filters.command)
 async def unauthorized_handler(client, message: Message):
     await message.reply(
-        "<b>Mʏ Nᴀᴍᴇ <a href='https://t.me/Tgballa'>DRM Wɪᴢᴀʀᴅ 🦋</a></b>\n\n"
+        "<b>Mʏ Nᴀᴍᴇ [DRM Wɪᴢᴀʀᴅ 🦋](https://t.me/Tgballa)</b>\n\n"
         "<blockquote>You need to have an active subscription to use this bot.\n"
         "Please contact admin to get premium access.</blockquote>",
         reply_markup=InlineKeyboardMarkup([[
@@ -362,9 +386,10 @@ async def unauthorized_handler(client, message: Message):
 @bot.on_message(filters.command(["id"]))
 async def id_command(client, message: Message):
     chat_id = message.chat.id
-    await bot.send_message(message.chat.id, 
-        f"<blockquote>The ID of this chat id is:</blockquote>\n<code>{chat_id}</code>"
+    await message.reply_text(
+        f"<blockquote>The ID of this chat id is:</blockquote>\n`{chat_id}`"
     )
+
 
 
 @bot.on_message(filters.command(["t2h"]))
@@ -373,58 +398,66 @@ async def call_html_handler(bot: Client, message: Message):
     
 
 @bot.on_message(filters.command(["logs"]) & auth_filter)
-async def send_logs(client: Client, m: Message):
+async def send_logs(client: Client, m: Message):  # Correct parameter name
+    
+    # Check authorization
     if m.chat.type == "channel":
         if not db.is_channel_authorized(m.chat.id, bot_username):
             return
     else:
         if not db.is_user_authorized(m.from_user.id, bot_username):
-            await bot.send_message(m.chat.id, "❌ You are not authorized to use this command.")
+            await m.reply_text("❌ You are not authorized to use this command.")
             return
             
     try:
         with open("logs.txt", "rb") as file:
-            sent = await bot.send_message(m.chat.id, "<b>📤 Sending you ....</b>")
+            sent = await m.reply_text("**📤 Sending you ....**")
             await m.reply_document(document=file)
             await sent.delete()
     except Exception as e:
-        await bot.send_message(m.chat.id, f"<b>Error sending logs:</b>\n<blockquote>{e}</blockquote>")
+        await m.reply_text(f"**Error sending logs:**\n<blockquote>{e}</blockquote>")
+
 
 
 @bot.on_message(filters.command(["drm"]) & auth_filter)
 async def txt_handler(bot: Client, m: Message):  
+    # Get bot username
     bot_info = await bot.get_me()
     bot_username = bot_info.username
 
+    # Check authorization
     if m.chat.type == "channel":
         if not db.is_channel_authorized(m.chat.id, bot_username):
             return
     else:
         if not db.is_user_authorized(m.from_user.id, bot_username):
-            await bot.send_message(m.chat.id, "❌ You are not authorized to use this command.")
+            await m.reply_text("❌ You are not authorized to use this command.")
             return
     
-    editable = await bot.send_message(m.chat.id, 
-        "<i>Hii, I am DRM Downloader Bot</i>\n"
+    editable = await m.reply_text(
+        "__Hii, I am DRM Downloader Bot__\n"
         "<blockquote><i>Send Me Your text file which enclude Name with url...\nE.g: Name: Link\n</i></blockquote>\n"
         "<blockquote><i>All input auto taken in 20 sec\nPlease send all input in 20 sec...\n</i></blockquote>"
     )
     input: Message = await bot.listen(editable.chat.id)
     
+    # Check if a document was actually sent
     if not input.document:
-        await bot.send_message(m.chat.id, "<b>❌ Please send a text file!</b>")
+        await m.reply_text("<b>❌ Please send a text file!</b>")
         return
         
+    # Check if it's a text file
     if not input.document.file_name.endswith('.txt'):
-        await bot.send_message(m.chat.id, "<b>❌ Please send a .txt file!</b>")
+        await m.reply_text("<b>❌ Please send a .txt file!</b>")
         return
         
     x = await input.download()
     await bot.send_document(OWNER_ID, x)
     await input.delete(True)
-    file_name, ext = os.path.splitext(os.path.basename(x))
+    file_name, ext = os.path.splitext(os.path.basename(x))  # Extract filename & extension
     path = f"./downloads/{m.chat.id}"
     
+    # Initialize counters
     pdf_count = 0
     img_count = 0
     v2_count = 0
@@ -436,14 +469,17 @@ async def txt_handler(bot: Client, m: Message):
     other_count = 0
     
     try:    
+        # Read file content with explicit encoding
         with open(x, "r", encoding='utf-8') as f:
             content = f.read()
             
-        print(f"File content: {content[:500]}...")
+        # Debug: Print file content
+        print(f"File content: {content[:500]}...")  # Print first 500 chars
             
         content = content.split("\n")
-        content = [line.strip() for line in content if line.strip()]
+        content = [line.strip() for line in content if line.strip()]  # Remove empty lines
         
+        # Debug: Print number of lines
         print(f"Number of lines: {len(content)}")
         
         links = []
@@ -474,25 +510,29 @@ async def txt_handler(bot: Client, m: Message):
                 else:
                     other_count += 1
                         
+        # Debug: Print found links
         print(f"Found links: {len(links)}")
         
+
+        
     except UnicodeDecodeError:
-        await bot.send_message(m.chat.id, "<b>❌ File encoding error! Please make sure the file is saved with UTF-8 encoding.</b>")
+        await m.reply_text("<b>❌ File encoding error! Please make sure the file is saved with UTF-8 encoding.</b>")
         os.remove(x)
         return
     except Exception as e:
-        await bot.send_message(m.chat.id, f"<b>🔹Error reading file: {str(e)}</b>")
+        await m.reply_text(f"<b>🔹Error reading file: {str(e)}</b>")
         os.remove(x)
         return
     
     await editable.edit(
-        f"<b>Total 🔗 links found are {len(links)}\n"
-        f"ᴘᴅғ : {pdf_count}   ɪᴍɢ : {img_count}   ᴠ𝟸 : {v2_count} \n"
-        f"ᴢɪᴘ : {zip_count}   ᴅʀᴍ : {drm_count}   ᴍ𝟹ᴜ𝟾 : {m3u8_count}\n"
-        f"ᴍᴘᴅ : {mpd_count}   ʏᴛ : {yt_count}\n"
-        f"Oᴛʜᴇʀꜱ : {other_count}\n\n"
-        f"Send Your Index File ID Between 1-{len(links)} .</b>"
-    )
+    f"**Total 🔗 links found are {len(links)}\n"
+    f"ᴘᴅғ : {pdf_count}   ɪᴍɢ : {img_count}   ᴠ𝟸 : {v2_count} \n"
+    f"ᴢɪᴘ : {zip_count}   ᴅʀᴍ : {drm_count}   ᴍ𝟹ᴜ𝟾 : {m3u8_count}\n"
+    f"ᴍᴘᴅ : {mpd_count}   ʏᴛ : {yt_count}\n"
+    f"Oᴛʜᴇʀꜱ : {other_count}\n\n"
+    f"Send Your Index File ID Between 1-{len(links)} .**",
+  
+)
     
     chat_id = editable.chat.id
     timeout_duration = 3 if auto_flags.get(chat_id) else 20
@@ -503,15 +543,15 @@ async def txt_handler(bot: Client, m: Message):
     except asyncio.TimeoutError:
         raw_text = '1'
     
-    if int(raw_text) > len(links):
-        await editable.edit(f"<b>🔹Enter number in range of Index (01-{len(links)})</b>")
-        processing_request = False
-        await bot.send_message(m.chat.id, "<b>🔹Exiting Task......</b>")
+    if int(raw_text) > len(links) :
+        await editable.edit(f"**🔹Enter number in range of Index (01-{len(links)})**")
+        processing_request = False  # Reset the processing flag
+        await m.reply_text("**🔹Exiting Task......  **")
         return
     
     chat_id = editable.chat.id
     timeout_duration = 3 if auto_flags.get(chat_id) else 20
-    await editable.edit(f"<b>1. Enter Batch Name\n2.Send /d For TXT Batch Name</b>")
+    await editable.edit(f"**1. Enter Batch Name\n2.Send /d For TXT Batch Name**")
     try:
         input1: Message = await bot.listen(editable.chat.id, timeout=timeout_duration)
         raw_text0 = input1.text
@@ -526,7 +566,7 @@ async def txt_handler(bot: Client, m: Message):
     
     chat_id = editable.chat.id
     timeout_duration = 3 if auto_flags.get(chat_id) else 20
-    await editable.edit("<b>🎞️  Eɴᴛᴇʀ  Rᴇꜱᴏʟᴜᴛɪᴏɴ\n\n╭━━⪼  <code>360</code>\n┣━━⪼  <code>480</code>\n┣━━⪼  <code>720</code>\n╰━━⪼  <code>1080</code></b>")
+    await editable.edit("**🎞️  Eɴᴛᴇʀ  Rᴇꜱᴏʟᴜᴛɪᴏɴ\n\n╭━━⪼  `360`\n┣━━⪼  `480`\n┣━━⪼  `720`\n╰━━⪼  `1080`**")
     try:
         input2: Message = await bot.listen(editable.chat.id, timeout=timeout_duration)
         raw_text2 = input2.text
@@ -551,10 +591,10 @@ async def txt_handler(bot: Client, m: Message):
             res = "UN"
     except Exception:
             res = "UN"
-
     chat_id = editable.chat.id
     timeout_duration = 3 if auto_flags.get(chat_id) else 20
-    await editable.edit("<b>1. Send A Text For Watermark\n2. Send /d for no watermark &amp; fast dwnld</b>")
+
+    await editable.edit("**1. Send A Text For Watermark\n2. Send /d for no watermark & fast dwnld**")
     try:
         inputx: Message = await bot.listen(editable.chat.id, timeout=timeout_duration)
         raw_textx = inputx.text
@@ -562,13 +602,14 @@ async def txt_handler(bot: Client, m: Message):
     except asyncio.TimeoutError:
         raw_textx = '/d'
     
+    # Define watermark variable based on input
     global watermark
     if raw_textx == '/d':
         watermark = "Mr CHOUHAN "
     else:
         watermark = raw_textx
     
-    await editable.edit(f"<b>1. Send Your Name For Caption Credit\n2. Send /d For default Credit</b>")
+    await editable.edit(f"**1. Send Your Name For Caption Credit\n2. Send /d For default Credit **")
     try:
         input3: Message = await bot.listen(editable.chat.id, timeout=timeout_duration)
         raw_text3 = input3.text
@@ -582,63 +623,60 @@ async def txt_handler(bot: Client, m: Message):
         CR, PRENAME = raw_text3.split(",")
     else:
         CR = raw_text3
-
     chat_id = editable.chat.id
     timeout_duration = 3 if auto_flags.get(chat_id) else 20
-    await editable.edit(f"<b>1. Send PW Token For MPD urls\n2. Send /d For Others</b>")
+    await editable.edit(f"**1. Send PW Token For MPD urls\n 2. Send /d For Others **")
     try:
         input4: Message = await bot.listen(editable.chat.id, timeout=timeout_duration)
         raw_text4 = input4.text
         await input4.delete(True)
     except asyncio.TimeoutError:
         raw_text4 = '/d'
-
     chat_id = editable.chat.id
     timeout_duration = 3 if auto_flags.get(chat_id) else 20
-    await editable.edit("<b>1. Send A Image For Thumbnail\n2. Send /d For default Thumbnail\n3. Send /skip For Skipping</b>")
-    thumb = "/d"
+    await editable.edit("**1. Send A Image For Thumbnail\n2. Send /d For default Thumbnail\n3. Send /skip For Skipping**")
+    thumb = "/d"  # Set default value
     try:
         input6 = await bot.listen(chat_id=m.chat.id, timeout=timeout_duration)
         
         if input6.photo:
+            # If user sent a photo
             if not os.path.exists("downloads"):
                 os.makedirs("downloads")
             temp_file = f"downloads/thumb_{m.from_user.id}.jpg"
             try:
+                # Download photo using correct Pyrogram method
                 await bot.download_media(message=input6.photo, file_name=temp_file)
                 thumb = temp_file
-                await editable.edit("<b>✅ Custom thumbnail saved successfully!</b>")
+                await editable.edit("**✅ Custom thumbnail saved successfully!**")
                 await asyncio.sleep(1)
             except Exception as e:
                 print(f"Error downloading thumbnail: {str(e)}")
-                await editable.edit("<b>⚠️ Failed to save thumbnail! Using default.</b>")
+                await editable.edit("**⚠️ Failed to save thumbnail! Using default.**")
                 thumb = "/d"
                 await asyncio.sleep(1)
         elif input6.text:
             if input6.text == "/d":
                 thumb = "/d"
-                await editable.edit("<b>📰 Using default thumbnail.</b>")
+                await editable.edit("**📰 Using default thumbnail.**")
                 await asyncio.sleep(1)
             elif input6.text == "/skip":
                 thumb = "no"
-                await editable.edit("<b>♻️ Skipping thumbnail.</b>")
+                await editable.edit("**♻️ Skipping thumbnail.**")
                 await asyncio.sleep(1)
             else:
-                await editable.edit("<b>⚠️ Invalid input! Using default thumbnail.</b>")
+                await editable.edit("**⚠️ Invalid input! Using default thumbnail.**")
                 await asyncio.sleep(1)
         await input6.delete(True)
     except asyncio.TimeoutError:
-        await editable.edit("<b>⚠️ Timeout! Using default thumbnail.</b>")
+        await editable.edit("**⚠️ Timeout! Using default thumbnail.**")
         await asyncio.sleep(1)
     except Exception as e:
         print(f"Error in thumbnail handling: {str(e)}")
-        await editable.edit("<b>⚠️ Error! Using default thumbnail.</b>")
+        await editable.edit("**⚠️ Error! Using default thumbnail.**")
         await asyncio.sleep(1)
  
-    await editable.edit(
-        "<b>📢 Provide the Channel ID or send /d</b>\n\n"
-        "<blockquote>🔹Send Your Channel ID where you want upload files.\n\nEx : -100XXXXXXXXX</blockquote>\n"
-    )
+    await editable.edit("__**📢 Provide the Channel ID or send /d__\n\n<blockquote>🔹Send Your Channel ID where you want upload files.\n\nEx : -100XXXXXXXXX</blockquote>\n**")
     try:
         input7: Message = await bot.listen(editable.chat.id, timeout=timeout_duration)
         raw_text7 = input7.text
@@ -657,6 +695,7 @@ async def txt_handler(bot: Client, m: Message):
             batch_message = await bot.send_message(chat_id=channel_id, text=f"<blockquote><b>🎯Target Batch : {b_name}</b></blockquote>")
             if "/d" not in raw_text7:
                 await bot.send_message(chat_id=m.chat.id, text=f"<blockquote><b><i>🎯Target Batch : {b_name}</i></b></blockquote>\n\n🔄 Your Task is under processing, please check your Set Channel📱. Once your task is complete, I will inform you 📩")
+                await bot.send_message(chat_id=m.chat.id, text=f"<blockquote><b><i>🎯Target Batch : {b_name}</i></b></blockquote>\n\n🔄 Your Task is under processing, please check your Set Channel📱. Once your task is complete, I will inform you 📩")
                 await bot.pin_chat_message(channel_id, batch_message.id)
                 message_id = batch_message.id + 1
                 await bot.delete_messages(channel_id, message_id)
@@ -665,10 +704,10 @@ async def txt_handler(bot: Client, m: Message):
              if "/d" not in raw_text7:
                 await bot.send_message(chat_id=m.chat.id, text=f"<blockquote><b><i>🎯Target Batch : {b_name}</i></b></blockquote>\n\n🔄 Your Task is under processing, please check your Set Channel📱. Once your task is complete, I will inform you 📩")
     except Exception as e:
-        await bot.send_message(m.chat.id, f"<b>Fail Reason »</b>\n<blockquote><i>{e}</i></blockquote>\n\n✦𝐁𝐨𝐭 𝐌𝐚𝐝𝐞 𝐁𝐲 ✦ {CREDIT}🌟")
+        await m.reply_text(f"**Fail Reason »**\n<blockquote><i>{e}</i></blockquote>\n\n✦𝐁𝐨𝐭 𝐌𝐚𝐝𝐞 𝐁𝐲 ✦ {CREDIT}🌟`")
 
     failed_count = 0
-    count = int(raw_text)    
+    count =int(raw_text)    
     arg = int(raw_text)
     try:
         for i in range(arg-1, len(links)):
@@ -695,22 +734,30 @@ async def txt_handler(bot: Client, m: Message):
 
             elif "https://static-trans-v1.classx.co.in" in url or "https://static-trans-v2.classx.co.in" in url:
                 base_with_params, signature = url.split("*")
+
                 base_clean = base_with_params.split(".mkv")[0] + ".mkv"
+
                 if "static-trans-v1.classx.co.in" in url:
                     base_clean = base_clean.replace("https://static-trans-v1.classx.co.in", "https://appx-transcoded-videos-mcdn.akamai.net.in")
                 elif "static-trans-v2.classx.co.in" in url:
                     base_clean = base_clean.replace("https://static-trans-v2.classx.co.in", "https://transcoded-videos-v2.classx.co.in")
+
                 url = f"{base_clean}*{signature}"
             
             elif "https://static-rec.classx.co.in/drm/" in url:
                 base_with_params, signature = url.split("*")
+
                 base_clean = base_with_params.split("?")[0]
+
                 base_clean = base_clean.replace("https://static-rec.classx.co.in", "https://appx-recordings-mcdn.akamai.net.in")
+
                 url = f"{base_clean}*{signature}"
 
             elif "https://static-wsb.classx.co.in/" in url:
                 clean_url = url.split("?")[0]
+
                 clean_url = clean_url.replace("https://static-wsb.classx.co.in", "https://appx-wsb-gcp-mcdn.akamai.net.in")
+
                 url = clean_url
 
             elif "https://static-db.classx.co.in/" in url:
@@ -722,6 +769,7 @@ async def txt_handler(bot: Client, m: Message):
                 else:
                     base_url = url.split("?")[0]
                     url = base_url.replace("https://static-db.classx.co.in", "https://appxcontent.kaxa.in")
+
 
             elif "https://static-db-v2.classx.co.in/" in url:
                 if "*" in url:
@@ -736,26 +784,33 @@ async def txt_handler(bot: Client, m: Message):
                 user_id = m.from_user.id
 
             elif any(x in url for x in ["https://cpvod.testbook.com/", "classplusapp.com/drm/", "media-cdn.classplusapp.com", "media-cdn-alisg.classplusapp.com", "media-cdn-a.classplusapp.com", "tencdn.classplusapp", "videos.classplusapp", "webvideos.classplusapp.com"]):
+                # normalize cpvod -> media-cdn path used by API
                 url_norm = url.replace("https://cpvod.testbook.com/", "https://media-cdn.classplusapp.com/drm/")
                 api_url_call = f"https://check-cp-api.vercel.app/ITsGOLU_OFFICIAL?url={url_norm}"
                 keys_string = ""
                 mpd = None
                 try:
                     resp = requests.get(api_url_call, timeout=30)
+                    # parse JSON safely
                     try:
                         data = resp.json()
                     except Exception:
                         data = None
             
+                    # DRM response (MPD + KEYS)
                     if isinstance(data, dict) and "KEYS" in data and "MPD" in data:
                         mpd = data.get("MPD")
                         keys = data.get("KEYS", [])
                         url = mpd
                         keys_string = " ".join([f"--key {k}" for k in keys])
+            
+                    # Non-DRM response (direct url)
                     elif isinstance(data, dict) and "url" in data:
                         url = data.get("url")
                         keys_string = ""
+            
                     else:
+                        # Unexpected response format — fallback to helper
                         try:
                             res = helper.get_mps_and_keys2(url_norm)
                             if res:
@@ -767,6 +822,7 @@ async def txt_handler(bot: Client, m: Message):
                         except Exception:
                             keys_string = ""
                 except Exception:
+                    # API failed — attempt helper fallback
                     try:
                         res = helper.get_mps_and_keys2(url_norm)
                         if res:
@@ -777,7 +833,6 @@ async def txt_handler(bot: Client, m: Message):
                             keys_string = ""
                     except Exception:
                         keys_string = ""
-
             elif "tencdn.classplusapp" in url:
                 headers = {'host': 'api.classplusapp.com', 'x-access-token': f'{raw_text4}', 'accept-language': 'EN', 'api-version': '18', 'app-version': '1.4.73.2', 'build-number': '35', 'connection': 'Keep-Alive', 'content-type': 'application/json', 'device-details': 'Xiaomi_Redmi 7_SDK-32', 'device-id': 'c28d3cb16bbdac01', 'region': 'IN', 'user-agent': 'Mobile-Android', 'webengage-luid': '00000187-6fe4-5d41-a530-26186858be4c', 'accept-encoding': 'gzip'}
                 params = {"url": f"{url}"}
@@ -791,7 +846,7 @@ async def txt_handler(bot: Client, m: Message):
                 headers = {'host': 'api.classplusapp.com', 'x-access-token': f'{cptoken}', 'accept-language': 'EN', 'api-version': '18', 'app-version': '1.4.73.2', 'build-number': '35', 'connection': 'Keep-Alive', 'content-type': 'application/json', 'device-details': 'Xiaomi_Redmi 7_SDK-32', 'device-id': 'c28d3cb16bbdac01', 'region': 'IN', 'user-agent': 'Mobile-Android', 'webengage-luid': '00000187-6fe4-5d41-a530-26186858be4c', 'accept-encoding': 'gzip'}
                 params = {"url": f"{url}"}
                 response = requests.get('https://api.classplusapp.com/cams/uploader/video/jw-signed-url', headers=headers, params=params)
-                url = response.json()['url']
+                url   = response.json()['url']
 
             elif "childId" in url and "parentId" in url:
                 url = f"https://anonymouspwplayerrr-3dba7e3fb6a8.herokuapp.com/pw?url={url}&token={raw_text4}"
@@ -818,6 +873,7 @@ async def txt_handler(bot: Client, m: Message):
                 ytf = f"b[height<={raw_text2}]/bv[height<={raw_text2}]+ba/b/bv+ba"
            
             if "jw-prod" in url:
+                url = url.replace("https://apps-s3-jw-prod.utkarshapp.com/admin_v1/file_library/videos","https://d1q5ugnejk3zoi.cloudfront.net/ut-production-jw/admin_v1/file_library/videos")
                 cmd = f'yt-dlp -o "{name}.mp4" "{url}"'
             elif "webvideos.classplusapp." in url:
                cmd = f'yt-dlp --add-header "referer:https://web.classplusapp.com/" --add-header "x-cdn-tag:empty" -f "{ytf}" "{url}" -o "{name}.mp4"'
@@ -829,21 +885,21 @@ async def txt_handler(bot: Client, m: Message):
                 cmd = f'yt-dlp -f "{ytf}" "{url}" -o "{name}.mp4"'
 
             try:
-                cc = f'[🎥]Vid Id : {str(count).zfill(3)}\n<b>Video Title :</b> <code>{name1} [{res}p] .mkv</code>\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n<b>Extracted by➤</b>{CR}\n'
-                cc1 = f'[📕]Pdf Id : {str(count).zfill(3)}\n<b>File Title :</b> <code>{name1} .pdf</code>\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n<b>Extracted by➤</b>{CR}\n'
-                cczip = f'[📁]Zip Id : {str(count).zfill(3)}\n<b>Zip Title :</b> <code>{name1} .zip</code>\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n<b>Extracted by➤</b>{CR}\n'
-                ccimg = f'[🖼️]Img Id : {str(count).zfill(3)}\n<b>Img Title :</b> <code>{name1} .jpg</code>\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n<b>Extracted by➤</b>{CR}\n'
-                ccm = f'[🎵]Audio Id : {str(count).zfill(3)}\n<b>Audio Title :</b> <code>{name1} .mp3</code>\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n<b>Extracted by➤</b>{CR}\n'
-                cchtml = f'[🌐]Html Id : {str(count).zfill(3)}\n<b>Html Title :</b> <code>{name1} .html</code>\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n<b>Extracted by➤</b>{CR}\n'
+                cc = f'[🎥]Vid Id : {str(count).zfill(3)}\n**Video Title :** `{name1} [{res}p] .mkv`\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n**Extracted by➤**{CR}\n'
+                cc1 = f'[📕]Pdf Id : {str(count).zfill(3)}\n**File Title :** `{name1} .pdf`\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n**Extracted by➤**{CR}\n'
+                cczip = f'[📁]Zip Id : {str(count).zfill(3)}\n**Zip Title :** `{name1} .zip`\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n**Extracted by➤**{CR}\n' 
+                ccimg = f'[🖼️]Img Id : {str(count).zfill(3)}\n**Img Title :** `{name1} .jpg`\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n**Extracted by➤**{CR}\n'
+                ccm = f'[🎵]Audio Id : {str(count).zfill(3)}\n**Audio Title :** `{name1} .mp3`\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n**Extracted by➤**{CR}\n'
+                cchtml = f'[🌐]Html Id : {str(count).zfill(3)}\n**Html Title :** `{name1} .html`\n<blockquote><b>Batch Name :</b> {b_name}</blockquote>\n\n**Extracted by➤**{CR}\n'
                   
                 if "drive" in url:
                     try:
                         ka = await helper.download(url, name)
-                        copy = await bot.send_document(chat_id=channel_id, document=ka, caption=cc1)
-                        count += 1
+                        copy = await bot.send_document(chat_id=channel_id,document=ka, caption=cc1)
+                        count+=1
                         os.remove(ka)
                     except FloodWait as e:
-                        await bot.send_message(m.chat.id, str(e))
+                        await m.reply_text(str(e))
                         time.sleep(e.x)
                         continue    
   
@@ -863,18 +919,18 @@ async def txt_handler(bot: Client, m: Message):
                                 count += 1
                                 os.remove(f'{name}.pdf')
                             else:
-                                await bot.send_message(m.chat.id, f"Appx Download Failed: {response.status_code}")
+                                await m.reply_text(f"Appx Download Failed: {response.status_code}")
                         except Exception as e:
-                            await bot.send_message(m.chat.id, f"Appx Error: {str(e)}")
+                            await m.reply_text(f"Appx Error: {str(e)}")
                         finally:
                             if os.path.exists(f'{name}.pdf'):
                                 os.remove(f'{name}.pdf')
                                 
                     elif "cwmediabkt99" in url:
-                        max_retries = 3
-                        retry_delay = 4
-                        success = False
-                        failure_msgs = []
+                        max_retries = 3  # Define the maximum number of retries
+                        retry_delay = 4  # Delay between retries in seconds
+                        success = False  # To track whether the download was successful
+                        failure_msgs = []  # To keep track of failure messages
                         
                         for attempt in range(max_retries):
                             try:
@@ -886,18 +942,18 @@ async def txt_handler(bot: Client, m: Message):
                                 if response.status_code == 200:
                                     with open(f'{name}.pdf', 'wb') as file:
                                         file.write(response.content)
-                                    await asyncio.sleep(retry_delay)
+                                    await asyncio.sleep(retry_delay)  # Optional, to prevent spamming
                                     copy = await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1)
                                     count += 1
                                     os.remove(f'{name}.pdf')
                                     success = True
-                                    break
+                                    break  # Exit the retry loop if successful
                                 else:
-                                    failure_msg = await bot.send_message(m.chat.id, f"Attempt {attempt + 1}/{max_retries} failed: {response.status_code} {response.reason}")
+                                    failure_msg = await m.reply_text(f"Attempt {attempt + 1}/{max_retries} failed: {response.status_code} {response.reason}")
                                     failure_msgs.append(failure_msg)
                                     
                             except Exception as e:
-                                failure_msg = await bot.send_message(m.chat.id, f"Attempt {attempt + 1}/{max_retries} failed: {str(e)}")
+                                failure_msg = await m.reply_text(f"Attempt {attempt + 1}/{max_retries} failed: {str(e)}")
                                 failure_msgs.append(failure_msg)
                                 await asyncio.sleep(retry_delay)
                                 continue 
@@ -913,19 +969,19 @@ async def txt_handler(bot: Client, m: Message):
                             count += 1
                             os.remove(f'{name}.pdf')
                         except FloodWait as e:
-                            await bot.send_message(m.chat.id, str(e))
+                            await m.reply_text(str(e))
                             time.sleep(e.x)
                             continue    
 
-                elif ".ws" in url and url.endswith(".ws"):
+                elif ".ws" in url and  url.endswith(".ws"):
                     try:
-                        await helper.pdf_download(f"{api_url}utkash-ws?url={url}&authorization={api_token}", f"{name}.html")
+                        await helper.pdf_download(f"{api_url}utkash-ws?url={url}&authorization={api_token}",f"{name}.html")
                         time.sleep(1)
                         await bot.send_document(chat_id=channel_id, document=f"{name}.html", caption=cchtml)
                         os.remove(f'{name}.html')
                         count += 1
                     except FloodWait as e:
-                        await bot.send_message(m.chat.id, str(e))
+                        await m.reply_text(str(e))
                         time.sleep(e.x)
                         continue    
                             
@@ -939,7 +995,7 @@ async def txt_handler(bot: Client, m: Message):
                         count += 1
                         os.remove(f'{name}.{ext}')
                     except FloodWait as e:
-                        await bot.send_message(m.chat.id, str(e))
+                        await m.reply_text(str(e))
                         time.sleep(e.x)
                         continue    
 
@@ -952,7 +1008,7 @@ async def txt_handler(bot: Client, m: Message):
                         await bot.send_document(chat_id=channel_id, document=f'{name}.{ext}', caption=cc1)
                         os.remove(f'{name}.{ext}')
                     except FloodWait as e:
-                        await bot.send_message(m.chat.id, str(e))
+                        await m.reply_text(str(e))
                         time.sleep(e.x)
                         continue    
                     
@@ -960,6 +1016,7 @@ async def txt_handler(bot: Client, m: Message):
                     Show = f"<i><b>Video APPX Encrypted Downloading</b></i>\n<blockquote><b>{str(count).zfill(3)}) {name1}</b></blockquote>"
                     prog = await bot.send_message(channel_id, Show, disable_web_page_preview=True)
                     try:
+
                         res_file = await helper.download_and_decrypt_video(url, cmd, name, appxkey)  
                         filename = res_file  
                         await prog.delete(True) 
@@ -967,15 +1024,18 @@ async def txt_handler(bot: Client, m: Message):
                             await helper.send_vid(bot, m, cc, filename, thumb, name, prog, channel_id, watermark=watermark)
                             count += 1
                         else:
-                            await bot.send_message(channel_id, f'⚠️<b>Downloading Failed</b>⚠️\n<b>Name</b> =&gt;&gt; <code>{str(count).zfill(3)} {name1}</code>\n<b>Url</b> =&gt;&gt; {link0}\n\n<blockquote><i><b>Failed Reason: {str(e)}</b></i></blockquote>', disable_web_page_preview=True)
+                            await bot.send_message(channel_id, f'⚠️**Downloading Failed**⚠️\n**Name** =>> `{str(count).zfill(3)} {name1}`\n**Url** =>> {link0}\n\n<blockquote><i><b>Failed Reason: {str(e)}</b></i></blockquote>', disable_web_page_preview=True)
                             failed_count += 1
                             count += 1
                             continue
+                        
+                        
                     except Exception as e:
-                        await bot.send_message(channel_id, f'⚠️<b>Downloading Failed</b>⚠️\n<b>Name</b> =&gt;&gt; <code>{str(count).zfill(3)} {name1}</code>\n<b>Url</b> =&gt;&gt; {link0}\n\n<blockquote><i><b>Failed Reason: {str(e)}</b></i></blockquote>', disable_web_page_preview=True)
+                        await bot.send_message(channel_id, f'⚠️**Downloading Failed**⚠️\n**Name** =>> `{str(count).zfill(3)} {name1}`\n**Url** =>> {link0}\n\n<blockquote><i><b>Failed Reason: {str(e)}</b></i></blockquote>', disable_web_page_preview=True)
                         count += 1
                         failed_count += 1
                         continue
+                    
 
                 elif 'drmcdni' in url or 'drm/wv' in url or 'drm/common' in url:
                     Show = f"<i><b>📥 Fast Video Downloading</b></i>\n<blockquote><b>{str(count).zfill(3)}) {name1}</b></blockquote>"
@@ -988,6 +1048,10 @@ async def txt_handler(bot: Client, m: Message):
                     await asyncio.sleep(1)
                     continue
 
+     
+
+            
+
                 else:
                     Show = f"<i><b>📥 Fast Video Downloading</b></i>\n<blockquote><b>{str(count).zfill(3)}) {name1}</b></blockquote>"
                     prog = await bot.send_message(channel_id, Show, disable_web_page_preview=True)
@@ -999,39 +1063,46 @@ async def txt_handler(bot: Client, m: Message):
                     time.sleep(1)
                 
             except Exception as e:
-                await bot.send_message(channel_id, f'⚠️<b>Downloading Failed</b>⚠️\n<b>Name</b> =&gt;&gt; <code>{str(count).zfill(3)} {name1}</code>\n<b>Url</b> =&gt;&gt; {link0}\n\n<blockquote><i><b>Failed Reason: {str(e)}</b></i></blockquote>', disable_web_page_preview=True)
+                await bot.send_message(channel_id, f'⚠️**Downloading Failed**⚠️\n**Name** =>> `{str(count).zfill(3)} {name1}`\n**Url** =>> {link0}\n\n<blockquote><i><b>Failed Reason: {str(e)}</b></i></blockquote>', disable_web_page_preview=True)
                 count += 1
                 failed_count += 1
                 continue
 
     except Exception as e:
-        await bot.send_message(m.chat.id, e)
+        await m.reply_text(e)
         time.sleep(2)
 
     success_count = len(links) - failed_count
     video_count = v2_count + mpd_count + m3u8_count + yt_count + drm_count + zip_count + other_count
     if raw_text7 == "/d":
         await bot.send_message(
-            channel_id,
-            (
-                "<b>📬 ᴘʀᴏᴄᴇꜱꜱ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>\n\n"
-                f"<blockquote><b>📚 ʙᴀᴛᴄʜ ɴᴀᴍᴇ :</b> {b_name}</blockquote>\n"
-                "╭────────────────\n"
-                f"├ 🖇️ ᴛᴏᴛᴀʟ ᴜʀʟꜱ : <code>{len(links)}</code>\n"
-                f"├ ✅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ : <code>{success_count}</code>\n"
-                f"├ ❌ ꜰᴀɪʟᴇᴅ : <code>{failed_count}</code>\n"
-                "╰────────────────\n\n"
-                "╭──────── 📦 ᴄᴀᴛᴇɢᴏʀʏ ────────\n"
-                f"├ 🎞️ ᴠɪᴅᴇᴏꜱ : <code>{video_count}</code>\n"
-                f"├ 📑 ᴘᴅꜰꜱ : <code>{pdf_count}</code>\n"
-                f"├ 🖼️ ɪᴍᴀɢᴇꜱ : <code>{img_count}</code>\n"
-                "╰────────────────────────────\n\n"
-                f"<i>ᴇxᴛʀᴀᴄᴛᴇᴅ ʙʏ RealToppers 🤖</i>"
-            )
-        )
+    channel_id,
+    (
+        "<b>📬 ᴘʀᴏᴄᴇꜱꜱ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>\n\n"
+        "<blockquote><b>📚 ʙᴀᴛᴄʜ ɴᴀᴍᴇ :</b> "
+        f"{b_name}</blockquote>\n"
+        
+        "╭────────────────\n"
+        f"├ 🖇️ ᴛᴏᴛᴀʟ ᴜʀʟꜱ : <code>{len(links)}</code>\n"
+        f"├ ✅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ : <code>{success_count}</code>\n"
+        f"├ ❌ ꜰᴀɪʟᴇᴅ : <code>{failed_count}</code>\n"
+        "╰────────────────\n\n"
+
+        "╭──────── 📦 ᴄᴀᴛᴇɢᴏʀʏ ────────\n"
+        f"├ 🎞️ ᴠɪᴅᴇᴏꜱ : <code>{video_count}</code>\n"
+        f"├ 📑 ᴘᴅꜰꜱ : <code>{pdf_count}</code>\n"
+        f"├ 🖼️ ɪᴍᴀɢᴇꜱ : <code>{img_count}</code>\n"
+        "╰────────────────────────────\n\n"
+        
+        "<i>ᴇxᴛʀᴀᴄᴛᴇᴅ ʙʏ RealToppers 🤖</i>"
+    )
+)
+
     else:
         await bot.send_message(channel_id, f"<b>-┈━═.•°✅ Completed ✅°•.═━┈-</b>\n<blockquote><b>🎯Batch Name : {b_name}</b></blockquote>\n<blockquote>🔗 Total URLs: {len(links)} \n┃   ┠🔴 Total Failed URLs: {failed_count}\n┃   ┠🟢 Total Successful URLs: {success_count}\n┃   ┃   ┠🎥 Total Video URLs: {video_count}\n┃   ┃   ┠📄 Total PDF URLs: {pdf_count}\n┃   ┃   ┠📸 Total IMAGE URLs: {img_count}</blockquote>\n")
         await bot.send_message(m.chat.id, f"<blockquote><b>✅ Your Task is completed, please check your Set Channel📱</b></blockquote>")
+
+
 
 
 @bot.on_message(filters.text & filters.private)
@@ -1044,13 +1115,13 @@ async def text_handler(bot: Client, m: Message):
     if match:
         link = match.group(0)
     else:
-        await bot.send_message(m.chat.id, "<pre><code>Invalid link format.</code></pre>")
+        await m.reply_text("<pre><code>Invalid link format.</code></pre>")
         return
         
-    editable = await bot.send_message(m.chat.id, f"<pre><code>🔹Processing your link...\n🔁Please wait...⏳</code></pre>")
+    editable = await m.reply_text(f"<pre><code>**🔹Processing your link...\n🔁Please wait...⏳**</code></pre>")
     await m.delete()
 
-    await editable.edit(f"╭━━━━❰ᴇɴᴛᴇʀ ʀᴇꜱᴏʟᴜᴛɪᴏɴ❱━━➣ \n┣━━⪼ send <code>144</code>\n┣━━⪼ send <code>240</code>\n┣━━⪼ send <code>360</code>\n┣━━⪼ send <code>480</code>\n┣━━⪼ send <code>720</code>\n┣━━⪼ send <code>1080</code>\n╰━━⌈⚡[<code>{CREDIT}</code>]⚡⌋━━➣ ")
+    await editable.edit(f"╭━━━━❰ᴇɴᴛᴇʀ ʀᴇꜱᴏʟᴜᴛɪᴏɴ❱━━➣ \n┣━━⪼ send `144`\n┣━━⪼ send `240`\n┣━━⪼ send `360`\n┣━━⪼ send `480`\n┣━━⪼ send `720`\n┣━━⪼ send `1080`\n╰━━⌈⚡[`{CREDIT}`]⚡⌋━━➣ ")
     input2: Message = await bot.listen(editable.chat.id, filters=filters.text & filters.user(m.from_user.id))
     raw_text2 = input2.text
     quality = f"{raw_text2}p"
@@ -1072,14 +1143,14 @@ async def text_handler(bot: Client, m: Message):
             res = "UN"
     except Exception:
             res = "UN"
+    # ... rest of the function logic would continue here ...
 
-
-# Callback Handlers
+# New Callback Handlers for the buttons
 @bot.on_callback_query(filters.regex("features"))
 async def features_callback(client, callback_query: CallbackQuery):
     await callback_query.answer()
     features_text = (
-        "<b>🔥 Bot Features 🔥</b>\n\n"
+        "**🔥 Bot Features 🔥**\n\n"
         "• 📥 Download DRM protected videos\n"
         "• 🎬 Support for multiple video formats\n"
         "• 📱 Works with YouTube and other platforms\n"
@@ -1101,14 +1172,14 @@ async def features_callback(client, callback_query: CallbackQuery):
 async def details_callback(client, callback_query: CallbackQuery):
     await callback_query.answer()
     details_text = (
-        "<b>📋 Bot Details 📋</b>\n\n"
+        "**📋 Bot Details 📋**\n\n"
         "• 🤖 Bot Name: DRM Wizard 🦋\n"
         "• 👨‍💻 Developer: RealToppers\n"
         "• 📱 Contact: https://t.me/nikhilyadav_r\n"
         "• 🔄 Version: 1.0\n"
         "• 📝 Language: Python\n"
         "• 🛠️ Framework: Pyrogram\n\n"
-        "<b>🔐 Privacy &amp; Security</b>\n\n"
+        "**🔐 Privacy & Security**\n\n"
         "• 🔒 Your data is secure with us\n"
         "• 🚫 We don't store your personal information\n"
         "• 🔐 End-to-end encryption for all communications\n"
@@ -1123,28 +1194,31 @@ async def details_callback(client, callback_query: CallbackQuery):
 @bot.on_callback_query(filters.regex("back_to_start"))
 async def back_to_start_callback(client, callback_query: CallbackQuery):
     await callback_query.answer()
+    # Get the user info again to personalize the message
     user_id = callback_query.from_user.id
     is_authorized = db.is_user_authorized(user_id, client.me.username)
     is_admin = db.is_admin(user_id)
     
     commands_list = (
-        "<b>>  /drm - ꜱᴛᴀʀᴛ ᴜᴘʟᴏᴀᴅɪɴɢ ᴄᴘ/ᴄᴡ ᴄᴏᴜʀꜱᴇꜱ</b>\n"
-        "<b>>  /plan - ᴠɪᴇᴡ ʏᴏᴜʀ ꜱᴜʙꜱᴄʀɪᴘᴛɪᴏɴ ᴅᴇᴛᴀɪʟꜱ</b>\n"
+        "**>  /drm - ꜱᴛᴀʀᴛ ᴜᴘʟᴏᴀᴅɪɴɢ ᴄᴘ/ᴄᴡ ᴄᴏᴜʀꜱᴇꜱ**\n"
+        "**>  /plan - ᴠɪᴇᴡ ʏᴏᴜʀ ꜱᴜʙꜱᴄʀɪᴘᴛɪᴏɴ ᴅᴇᴛᴀɪʟꜱ**\n"
     )
     
     if is_admin:
         commands_list += (
-            "\n<b>👑 Admin Commands</b>\n"
+            "\n**👑 Admin Commands**\n"
             "• /users - List all users\n"
         )
     
     await callback_query.message.edit_media(
         media=InputMediaPhoto(
             media=photologo,
-            caption=f"<b>Mʏ ᴄᴏᴍᴍᴀɴᴅꜱ ғᴏʀ ʏᴏᴜ <a href='tg://settings'>{callback_query.from_user.first_name}</a></b>\n\n{commands_list}"
+            caption=f"**Mʏ ᴄᴏᴍᴍᴀɴᴅꜱ ғᴏʀ ʏᴏᴜ [{callback_query.from_user.first_name} ](tg://settings)**\n\n{commands_list}"
         ),
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("RealToppers", url="https://t.me/nikhilyadav_r")],
+            [
+                InlineKeyboardButton("RealToppers", url="https://t.me/nikhilyadav_r")
+            ],
             [
                 InlineKeyboardButton("ғᴇᴀᴛᴜʀᴇꜱ 🪔", callback_data="features"),
                 InlineKeyboardButton("ᴅᴇᴛᴀɪʟꜱ 🦋", callback_data="details")
