@@ -93,8 +93,6 @@ bot = Client(
     sleep_threshold=60,
     in_memory=True
 )
-from pyrogram.enums import ParseMode
-bot.set_parse_mode(ParseMode.HTML)
 # Register command handlers
 register_clean_handler(bot)
 
@@ -246,7 +244,7 @@ async def cookies_handler(client: Client, m: Message):
 async def text_to_txt(client, message: Message):
     user_id = str(message.from_user.id)
     # Inform the user to send the text data and its desired file name
-    editable = await message.reply_text(f"<blockquote>Welcome to the Text to .txt Converter!\nSend the **text** for convert into a `.txt` file.</blockquote>")
+    editable = await message.reply_text(f"<blockquote>Welcome to the Text to .txt Converter!\nSend the **text** for convert into a `.txt` file.</blockquote>", parse_mode="html")
     input_message: Message = await bot.listen(message.chat.id)
     if not input_message.text:
         await message.reply_text("**Send valid text data**")
@@ -271,7 +269,7 @@ async def text_to_txt(client, message: Message):
     with open(txt_file, 'w') as f:
         f.write(text_data)
         
-    await message.reply_document(document=txt_file, caption=f"`{custom_file_name}.txt`\n\n<blockquote>You can now download your content! 📥</blockquote>")
+    await message.reply_document(document=txt_file, caption=f"`{custom_file_name}.txt`\n\n<blockquote>You can now download your content! 📥</blockquote>", parse_mode="html")
     os.remove(txt_file)
 
 # Define paths for uploaded file and processed file
@@ -438,7 +436,7 @@ async def txt_handler(bot: Client, m: Message):
     editable = await m.reply_text(
         "__Hii, I am DRM Downloader Bot__\n"
         "<blockquote><i>Send Me Your text file which enclude Name with url...\nE.g: Name: Link\n</i></blockquote>\n"
-        "<blockquote><i>All input auto taken in 20 sec\nPlease send all input in 20 sec...\n</i></blockquote>"
+        "<blockquote><i>All input auto taken in 20 sec\nPlease send all input in 20 sec...\n</i></blockquote>, parse_mode="html""
     )
     input: Message = await bot.listen(editable.chat.id)
     
@@ -693,7 +691,7 @@ async def txt_handler(bot: Client, m: Message):
 
     try:
         if raw_text == "1":
-            batch_message = await bot.send_message(chat_id=channel_id, text=f"<blockquote><b>🎯Target Batch : {b_name}</b></blockquote>")
+            batch_message = await bot.send_message(chat_id=channel_id, text=f"<blockquote><b>🎯Target Batch : {b_name}</b></blockquote>", parse_mode="html")
             if "/d" not in raw_text7:
                 await bot.send_message(chat_id=m.chat.id, text=f"<blockquote><b><i>🎯Target Batch : {b_name}</i></b></blockquote>\n\n🔄 Your Task is under processing, please check your Set Channel📱. Once your task is complete, I will inform you 📩")
                 await bot.send_message(chat_id=m.chat.id, text=f"<blockquote><b><i>🎯Target Batch : {b_name}</i></b></blockquote>\n\n🔄 Your Task is under processing, please check your Set Channel📱. Once your task is complete, I will inform you 📩")
@@ -896,7 +894,7 @@ async def txt_handler(bot: Client, m: Message):
                 if "drive" in url:
                     try:
                         ka = await helper.download(url, name)
-                        copy = await bot.send_document(chat_id=channel_id,document=ka, caption=cc1)
+                        copy = await bot.send_document(chat_id=channel_id,document=ka, caption=cc1, , parse_mode="html")
                         count+=1
                         os.remove(ka)
                     except FloodWait as e:
@@ -916,7 +914,7 @@ async def txt_handler(bot: Client, m: Message):
                             if response.status_code == 200:
                                 with open(f'{name}.pdf', 'wb') as file:
                                     file.write(response.content)
-                                await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1)
+                                await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1, , parse_mode="html")
                                 count += 1
                                 os.remove(f'{name}.pdf')
                             else:
@@ -944,7 +942,7 @@ async def txt_handler(bot: Client, m: Message):
                                     with open(f'{name}.pdf', 'wb') as file:
                                         file.write(response.content)
                                     await asyncio.sleep(retry_delay)  # Optional, to prevent spamming
-                                    copy = await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1)
+                                    copy = await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1, , parse_mode="html")
                                     count += 1
                                     os.remove(f'{name}.pdf')
                                     success = True
@@ -966,7 +964,7 @@ async def txt_handler(bot: Client, m: Message):
                             cmd = f'yt-dlp -o "{name}.pdf" "{url}"'
                             download_cmd = f"{cmd} -R 25 --fragment-retries 25"
                             os.system(download_cmd)
-                            copy = await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1)
+                            copy = await bot.send_document(chat_id=channel_id, document=f'{name}.pdf', caption=cc1, , parse_mode="html")
                             count += 1
                             os.remove(f'{name}.pdf')
                         except FloodWait as e:
@@ -978,7 +976,7 @@ async def txt_handler(bot: Client, m: Message):
                     try:
                         await helper.pdf_download(f"{api_url}utkash-ws?url={url}&authorization={api_token}",f"{name}.html")
                         time.sleep(1)
-                        await bot.send_document(chat_id=channel_id, document=f"{name}.html", caption=cchtml)
+                        await bot.send_document(chat_id=channel_id, document=f"{name}.html", caption=cchtml, , parse_mode="html")
                         os.remove(f'{name}.html')
                         count += 1
                     except FloodWait as e:
@@ -992,7 +990,7 @@ async def txt_handler(bot: Client, m: Message):
                         cmd = f'yt-dlp -o "{name}.{ext}" "{url}"'
                         download_cmd = f"{cmd} -R 25 --fragment-retries 25"
                         os.system(download_cmd)
-                        copy = await bot.send_photo(chat_id=channel_id, photo=f'{name}.{ext}', caption=ccimg)
+                        copy = await bot.send_photo(chat_id=channel_id, photo=f'{name}.{ext}', caption=ccimg, , parse_mode="html")
                         count += 1
                         os.remove(f'{name}.{ext}')
                     except FloodWait as e:
@@ -1006,7 +1004,7 @@ async def txt_handler(bot: Client, m: Message):
                         cmd = f'yt-dlp -x --audio-format {ext} -o "{name}.{ext}" "{url}"'
                         download_cmd = f"{cmd} -R 25 --fragment-retries 25"
                         os.system(download_cmd)
-                        await bot.send_document(chat_id=channel_id, document=f'{name}.{ext}', caption=cc1)
+                        await bot.send_document(chat_id=channel_id, document=f'{name}.{ext}', caption=cc1, , parse_mode="html")
                         os.remove(f'{name}.{ext}')
                     except FloodWait as e:
                         await m.reply_text(str(e))
@@ -1044,7 +1042,7 @@ async def txt_handler(bot: Client, m: Message):
                     res_file = await helper.decrypt_and_merge_video(mpd, keys_string, path, name, raw_text2)
                     filename = res_file
                     await prog.delete(True)
-                    await helper.send_vid(bot, m, cc, filename, thumb, name, prog, channel_id, watermark=watermark)
+                    await helper.send_vid(bot, m, cc, filename, thumb, name, prog, channel_id, watermark=watermark, parse_mode="html")
                     count += 1
                     await asyncio.sleep(1)
                     continue
@@ -1101,7 +1099,7 @@ async def txt_handler(bot: Client, m: Message):
 
     else:
         await bot.send_message(channel_id, f"<b>-┈━═.•°✅ Completed ✅°•.═━┈-</b>\n<blockquote><b>🎯Batch Name : {b_name}</b></blockquote>\n<blockquote>🔗 Total URLs: {len(links)} \n┃   ┠🔴 Total Failed URLs: {failed_count}\n┃   ┠🟢 Total Successful URLs: {success_count}\n┃   ┃   ┠🎥 Total Video URLs: {video_count}\n┃   ┃   ┠📄 Total PDF URLs: {pdf_count}\n┃   ┃   ┠📸 Total IMAGE URLs: {img_count}</blockquote>\n")
-        await bot.send_message(m.chat.id, f"<blockquote><b>✅ Your Task is completed, please check your Set Channel📱</b></blockquote>")
+        await bot.send_message(m.chat.id, f"<blockquote><b>✅ Your Task is completed, please check your Set Channel📱</b></blockquote>", parse_mode="html")
 
 
 
