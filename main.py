@@ -436,7 +436,7 @@ async def txt_handler(bot: Client, m: Message):
     editable = await m.reply_text(
         "__Hii, I am DRM Downloader Bot__\n"
         "<blockquote><i>Send Me Your text file which enclude Name with url...\nE.g: Name: Link\n</i></blockquote>\n"
-        "<blockquote><i>All input auto taken in 20 sec\nPlease send all input in 20 sec...\n</i></blockquote>, parse_mode="html""
+        "<blockquote><i>All input auto taken in 20 sec\nPlease send all input in 20 sec...\n</i></blockquote>", parse_mode="html"
     )
     input: Message = await bot.listen(editable.chat.id)
     
