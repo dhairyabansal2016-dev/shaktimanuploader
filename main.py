@@ -34,7 +34,7 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 
 # ⚙️ Pyrogram
-from pyrogram import Client, filters, idle
+from pyrogram import Client, filters, idle, enums
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import (
     Message,
@@ -89,7 +89,8 @@ bot = Client(
     bot_token=BOT_TOKEN,
     workers=10,
     sleep_threshold=60,
-    in_memory=True
+    in_memory=True,
+    parse_mode=enums.ParseMode.HTML
 )
 
 # Register command handlers
