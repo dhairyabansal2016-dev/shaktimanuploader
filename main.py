@@ -67,9 +67,7 @@ from logs import logging
 from utils import progress_bar
 from vars import *
 
-# Pyromod fix
-import pyromod.listen
-pyromod.listen.Client.listen = pyromod.listen.listen
+from pyromod import listen
 
 from db import db
 
