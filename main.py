@@ -34,7 +34,8 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 
 # ⚙️ Pyrogram
-from pyrogram import Client, filters, idle, enums
+from pyromod import listen
+from pyrogram import Client, filters, idle
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import (
     Message,
@@ -67,8 +68,6 @@ from logs import logging
 from utils import progress_bar
 from vars import *
 
-from pyromod import listen
-
 from db import db
 
 auto_flags = {}
@@ -81,16 +80,12 @@ userbot = None
 timeout_duration = 300  # 5 minutes
 
 
-# Initialize bot with random session
+# Initialize bot
 bot = Client(
     "ugx",
     api_id=API_ID,
     api_hash=API_HASH,
-    bot_token=BOT_TOKEN,
-    workers=10,
-    sleep_threshold=60,
-    in_memory=True,
-    parse_mode=enums.ParseMode.HTML
+    bot_token=BOT_TOKEN
 )
 
 # Register command handlers
