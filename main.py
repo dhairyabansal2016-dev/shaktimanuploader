@@ -85,26 +85,45 @@ timeout_duration = 300
 # ══════════════════════════════════════════════════════════════
 # DB CHANNEL CONFIG
 # ══════════════════════════════════════════════════════════════
-DB_CHANNEL_ID = -1003791010360
+DB_CHANNEL_ID  = -1003791010360
+MONGO_URI      = "mongodb+srv://nikhil:nikhil@cluster0.u5oypby.mongodb.net/?appName=Cluster0"
+
+# ── MongoDB setup ─────────────────────────────────────────────
+from pymongo import MongoClient as PyMongoClient
+_mongo_client = PyMongoClient(MONGO_URI)
+_mongo_db     = _mongo_client["video_bot"]
+_mongo_col    = _mongo_db["video_cache"]
 
 
 # ══════════════════════════════════════════════════════════════
-# DB HELPER FUNCTIONS
+# DB HELPER FUNCTIONS  (MongoDB — permanent, survives restarts)
 # ══════════════════════════════════════════════════════════════
 
-async def search_db(bot: Client, url: str):
-    """Search DB channel for already downloaded video by URL in caption."""
+def search_db(url: str):
+    """Check if URL already exists in MongoDB. Returns message_id or None."""
     try:
-        async for msg in bot.search_messages(DB_CHANNEL_ID, query=url):
-            if msg.caption and url in msg.caption:
-                return msg.id
+        doc = _mongo_col.find_one({"url": url})
+        if doc:
+            return doc["message_id"]
     except Exception as e:
         print(f"DB search error: {e}")
     return None
 
 
+def _save_db_record(url: str, message_id: int):
+    """Save URL→message_id to MongoDB."""
+    try:
+        _mongo_col.update_one(
+            {"url": url},
+            {"$set": {"url": url, "message_id": message_id}},
+            upsert=True
+        )
+    except Exception as e:
+        print(f"DB record save error: {e}")
+
+
 async def save_to_db(bot: Client, from_chat_id: int, message_id: int, url: str):
-    """Save uploaded video to DB channel with URL as caption."""
+    """Copy video to DB channel and save URL→message_id in MongoDB."""
     try:
         db_msg = await bot.copy_message(
             chat_id=DB_CHANNEL_ID,
@@ -112,6 +131,7 @@ async def save_to_db(bot: Client, from_chat_id: int, message_id: int, url: str):
             message_id=message_id,
             caption=url
         )
+        _save_db_record(url, db_msg.id)
         return db_msg.id
     except Exception as e:
         print(f"DB save error: {e}")
@@ -119,7 +139,7 @@ async def save_to_db(bot: Client, from_chat_id: int, message_id: int, url: str):
 
 
 async def forward_from_db(bot: Client, db_message_id: int, target_chat_id: int, caption: str):
-    """Copy from DB to target channel with user caption. No 'Forwarded from' header."""
+    """Copy from DB channel to target with user caption. No 'Forwarded from' header."""
     try:
         await bot.copy_message(
             chat_id=target_chat_id,
@@ -711,7 +731,7 @@ async def txt_handler(bot: Client, m: Message):
                 topic_name = None
                 clean_title = raw_title.strip()
 
-            name1 = clean_title.replace("_", "").replace("\t", "").replace(":", "").replace("/", "").replace("+", "").replace("#", "").replace("|", "").replace("@", "").replace("*", "").replace(".", "").replace("https", "").replace("http", "").strip()
+            name1 = clean_title.replace("_", " ").replace("\t", "").replace(":", "").replace("+", "").replace("#", "").replace("@", "").replace("*", "").replace("https", "").replace("http", "").strip()
             if "," in raw_text3:
                 name = f'{PRENAME} {name1[:60]}'
             else:
@@ -866,12 +886,12 @@ async def txt_handler(bot: Client, m: Message):
                 # ── TOPIC LINE (hidden if no topic found) ─────────────
                 topic_line = f'\n<b>Topic Name : {topic_name}</b>' if topic_name else ''
 
-                cc    = f'[🎥]<b>Vid Id :</b> {str(count).zfill(3)}\n<b>Video Title :</b> {name1} [{res}p] .mkv\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
-                cc1   = f'[📕]<b>Pdf Id :</b> {str(count).zfill(3)}\n<b>File Title :</b> {name1} .pdf\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
-                cczip = f'[📁]<b>Zip Id :</b> {str(count).zfill(3)}\n<b>Zip Title :</b> {name1} .zip\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
-                ccimg = f'[🖼️]<b>Img Id :</b> {str(count).zfill(3)}\n<b>Img Title :</b> {name1} .jpg\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
-                ccm   = f'[🎵]<b>Audio Id :</b> {str(count).zfill(3)}\n<b>Audio Title :</b> {name1} .mp3\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
-                cchtml= f'[🌐]<b>Html Id :</b> {str(count).zfill(3)}\n<b>Html Title :</b> {name1} .html\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
+                cc    = f'[🎥]<b>Vid Id :</b> {str(count).zfill(3)}\n<b>Video Title :</b> {name1}\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
+                cc1   = f'[📕]<b>Pdf Id :</b> {str(count).zfill(3)}\n<b>File Title :</b> {name1}\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
+                cczip = f'[📁]<b>Zip Id :</b> {str(count).zfill(3)}\n<b>Zip Title :</b> {name1}\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
+                ccimg = f'[🖼️]<b>Img Id :</b> {str(count).zfill(3)}\n<b>Img Title :</b> {name1}\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
+                ccm   = f'[🎵]<b>Audio Id :</b> {str(count).zfill(3)}\n<b>Audio Title :</b> {name1}\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
+                cchtml= f'[🌐]<b>Html Id :</b> {str(count).zfill(3)}\n<b>Html Title :</b> {name1}\n<b>Batch Name : {b_name}</b>{topic_line}\n\n<b>Extracted by ➤ </b><i>{CR}</i>'
                   
                 if "drive" in url:
                     try:
@@ -995,7 +1015,7 @@ async def txt_handler(bot: Client, m: Message):
                     prog = await bot.send_message(channel_id, Show, disable_web_page_preview=True)
                     try:
                         # ── DB CHECK ──────────────────────────────────────────
-                        db_msg_id = await search_db(bot, link0)
+                        db_msg_id = search_db(link0)
                         if db_msg_id:
                             await prog.delete(True)
                             await forward_from_db(bot, db_msg_id, channel_id, cc)
@@ -1026,7 +1046,7 @@ async def txt_handler(bot: Client, m: Message):
                     Show = f"<i><b>📥 Fast Video Downloading</b></i>\n<blockquote><b>{str(count).zfill(3)}) {name1}</b></blockquote>"
                     prog = await bot.send_message(channel_id, Show, disable_web_page_preview=True)
                     # ── DB CHECK ──────────────────────────────────────────────
-                    db_msg_id = await search_db(bot, link0)
+                    db_msg_id = search_db(link0)
                     if db_msg_id:
                         await prog.delete(True)
                         await forward_from_db(bot, db_msg_id, channel_id, cc)
@@ -1049,7 +1069,7 @@ async def txt_handler(bot: Client, m: Message):
                     Show = f"<i><b>📥 Fast Video Downloading</b></i>\n<blockquote><b>{str(count).zfill(3)}) {name1}</b></blockquote>"
                     prog = await bot.send_message(channel_id, Show, disable_web_page_preview=True)
                     # ── DB CHECK ──────────────────────────────────────────────
-                    db_msg_id = await search_db(bot, link0)
+                    db_msg_id = search_db(link0)
                     if db_msg_id:
                         await prog.delete(True)
                         await forward_from_db(bot, db_msg_id, channel_id, cc)
